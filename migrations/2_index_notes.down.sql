@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_notes_notify_at_deleted_at_ordered;
