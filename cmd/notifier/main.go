@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"github.com/kotche/bot/internal/app/notifier"
 	notes_repo "github.com/kotche/bot/internal/repository/notes"
+	"github.com/kotche/bot/internal/service/kafka"
 	notes_serv "github.com/kotche/bot/internal/service/notes"
 	"log"
 	"os"
@@ -55,6 +56,13 @@ func main() {
 
 	notesServ := notes_serv.NewDefaultService(notes_repo.NewDefaultRepository(db))
 
-	notifierImpl := notifier.New(bot, notesServ)
+	kafkaServ, err := kafka.New([]string{"localhost:9092"}, "notifications",
+		"notification-consumers", 1, 1)
+	if err != nil {
+		log.Fatalf("failed to initialize kafka: %v", err)
+	}
+	defer kafkaServ.Close()
+
+	notifierImpl := notifier.New(bot, notesServ, kafkaServ)
 	notifierImpl.Start()
 }

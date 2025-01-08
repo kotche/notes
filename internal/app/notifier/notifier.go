@@ -2,92 +2,126 @@ package notifier
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"github.com/kotche/bot/internal/model"
+	"github.com/kotche/bot/internal/service/kafka"
 	"github.com/kotche/bot/internal/service/notes"
-	"github.com/segmentio/kafka-go"
 	"gopkg.in/telebot.v3"
 	"log"
+	"strconv"
 	"time"
 )
 
 const (
-	longProcessTimeout = 2
-	checkInterval      = 10 * time.Second
-	kafkaTopic         = "notifications"
-	kafkaBroker        = "localhost:9092"
+	checkInterval = time.Minute
 )
 
 type Notifier struct {
-	bot      *telebot.Bot
-	notes    notes.Service
-	producer *kafka.Writer
+	bot    *telebot.Bot
+	notes  notes.Service
+	broker kafka.MessageBroker
 }
 
-func New(bot *telebot.Bot, notes notes.Service) *Notifier {
-	// TODO(cheki) Инициализация Kafka producer (вынести отдельно)
-	producer := &kafka.Writer{
-		Addr:     kafka.TCP(kafkaBroker),
-		Topic:    kafkaTopic,
-		Balancer: &kafka.LeastBytes{},
+func New(bot *telebot.Bot, notes notes.Service, broker kafka.MessageBroker) *Notifier {
+	return &Notifier{
+		bot:    bot,
+		notes:  notes,
+		broker: broker,
 	}
-
-	return &Notifier{bot: bot, notes: notes, producer: producer}
 }
 
-func (w *Notifier) Start() {
+func (n *Notifier) Start() {
 	log.Println("Notifier started...")
 
-	if err := w.sendNotifications(); err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := n.sendNotifications(ctx); err != nil {
 		log.Printf("error sending notifications: %v", err)
 	}
+
+	go func() {
+		if err := n.runDeleteSentNotes(ctx); err != nil {
+			log.Printf("error deleting sent notes: %v", err)
+		}
+	}()
 
 	ticker := time.NewTicker(checkInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		if err := w.sendNotifications(); err != nil {
+		if err := n.sendNotifications(ctx); err != nil {
 			log.Printf("error sending notifications: %v", err)
 		}
 	}
 }
 
-func (w *Notifier) sendNotifications() error {
-	ctx, cancel := context.WithTimeout(context.Background(), longProcessTimeout*time.Second)
-	defer cancel()
-
-	start := time.Now().Truncate(checkInterval)
+func (n *Notifier) sendNotifications(ctx context.Context) error {
+	// TODO(cheki) вернуть
+	//start := time.Now().Truncate(checkInterval)
+	start := time.Date(2025, 1, 8, 15, 30, 0, 0, time.Local)
 	end := start.Add(checkInterval)
 
-	log.Printf("ReceiveNotifications start '%s' and end '%s'", start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"))
+	//log.Printf("ReceiveNotifications start '%s' and end '%s'", start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"))
 
-	notifications, err := w.notes.ReceiveNotifications(ctx, start, end)
+	notifications, err := n.notes.ReceiveNotifications(ctx, start, end)
 	if err != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return fmt.Errorf("context deadline exceeded while receive notifications: %v", err)
-		}
 		return err
 	}
 
 	for _, note := range notifications {
 		message := fmt.Sprintf("%s (id %d)", note.Text, note.ID)
 
-		if _, err = w.bot.Send(&telebot.User{ID: int64(note.UserID)}, message); err != nil {
+		if _, err = n.bot.Send(&telebot.User{ID: int64(note.UserID)}, message); err != nil {
 			return fmt.Errorf("failed to send notification to user %d: %v", note.UserID, err)
 		} else {
 			log.Printf("notification sent to user %d: %s", note.UserID, message)
 		}
 
-		// Отправляем note.ID в очередь Kafka
-		if err = w.producer.WriteMessages(ctx, kafka.Message{
-			Key:   []byte(fmt.Sprintf("user-%d", note.UserID)),
-			Value: []byte(fmt.Sprintf("%d", note.ID)),
-		}); err != nil {
-			log.Printf("failed to write message to Kafka: %v", err)
+		if err = n.broker.SendMessage(ctx,
+			[]byte(fmt.Sprintf("%d", note.UserID)),
+			[]byte(fmt.Sprintf("%d", note.ID)),
+		); err != nil {
+			log.Printf("failed to send message to kafka: %v", err)
 		} else {
-			log.Printf("notification sent to user %d: %s, note.ID sent to Kafka", note.UserID, message)
+			log.Printf("note '%d' for user '%d' sent to kafka", note.ID, note.UserID)
 		}
 	}
 
 	return nil
+}
+
+func (n *Notifier) runDeleteSentNotes(ctx context.Context) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		key, val, err := n.broker.ReadMessage(ctx)
+		if err != nil {
+			log.Printf("error reading message from kafka: %v", err)
+			continue
+		}
+
+		userID, err := strconv.ParseInt(string(key), 10, 64)
+		if err != nil {
+			log.Printf("error converting user id `%s` to int: %v", key, err)
+			continue
+		}
+
+		noteID, err := strconv.ParseInt(string(val), 10, 64)
+		if err != nil {
+			log.Printf("error converting note id `%s` to int: %v", key, err)
+			continue
+		}
+
+		//TODO(cheki) удалять батчами
+		if err = n.notes.Delete(ctx, model.NoteID(noteID), model.UserID(userID)); err != nil {
+			log.Printf("error deleting note %d: %v", noteID, err)
+		}
+
+		log.Printf("note '%d' for user '%d' deleted", noteID, userID)
+	}
 }
