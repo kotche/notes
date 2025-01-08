@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/kotche/bot/internal/app/writer"
 	"github.com/kotche/bot/internal/config"
+	"github.com/kotche/bot/internal/metrics"
 	notes_repo "github.com/kotche/bot/internal/repository/notes"
 	notes_serv "github.com/kotche/bot/internal/service/notes"
 	"log"
@@ -32,6 +33,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
+
+	metrics.Init()
+	metrics.StartMetricsServer(":8080")
 
 	bot, err := telebot.NewBot(telebot.Settings{
 		Token:  cfg.TelegramConfig.TokenWriteBot,

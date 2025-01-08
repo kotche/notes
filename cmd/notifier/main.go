@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/kotche/bot/internal/app/notifier"
 	"github.com/kotche/bot/internal/config"
+	"github.com/kotche/bot/internal/metrics"
 	notes_repo "github.com/kotche/bot/internal/repository/notes"
 	"github.com/kotche/bot/internal/service/kafka"
 	notes_serv "github.com/kotche/bot/internal/service/notes"
@@ -31,6 +32,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
+
+	metrics.Init()
+	metrics.StartMetricsServer(":8081")
 
 	bot, err := telebot.NewBot(telebot.Settings{
 		Token:  cfg.TelegramConfig.TokenNotifyBot,

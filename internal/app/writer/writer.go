@@ -33,7 +33,7 @@ func (w *Writer) Start() {
 	w.getHandler()
 	w.listNoteHandler()
 
-	log.Println("Writer started...")
+	log.Println("writer started...")
 	w.bot.Start()
 }
 

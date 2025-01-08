@@ -3,6 +3,7 @@ package notifier
 import (
 	"context"
 	"fmt"
+	"github.com/kotche/bot/internal/metrics"
 	"github.com/kotche/bot/internal/model"
 	"github.com/kotche/bot/internal/service/kafka"
 	"github.com/kotche/bot/internal/service/notes"
@@ -31,7 +32,7 @@ func New(bot *telebot.Bot, notes notes.Service, broker kafka.MessageBroker) *Not
 }
 
 func (n *Notifier) Start() {
-	log.Println("Notifier started...")
+	log.Println("notifier started...")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -57,8 +58,8 @@ func (n *Notifier) Start() {
 }
 
 func (n *Notifier) sendNotifications(ctx context.Context) error {
-	//start := time.Date(2025, 1, 8, 15, 30, 0, 0, time.Local)
-	start := time.Now().Truncate(checkInterval)
+	start := time.Date(2025, 1, 8, 15, 30, 0, 0, time.Local)
+	//start := time.Now().Truncate(checkInterval)
 	end := start.Add(checkInterval)
 
 	//log.Printf("ReceiveNotifications start '%s' and end '%s'", start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"))
@@ -76,6 +77,8 @@ func (n *Notifier) sendNotifications(ctx context.Context) error {
 		} else {
 			log.Printf("notification sent to user %d: %s", note.UserID, message)
 		}
+
+		metrics.SendNotes(1)
 
 		if err = n.broker.SendMessage(ctx,
 			[]byte(fmt.Sprintf("%d", note.UserID)),
