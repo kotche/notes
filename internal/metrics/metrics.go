@@ -5,32 +5,31 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log"
 	"net/http"
-	"time"
 )
 
 var (
-	// Метрика для общего количества отправленных заметок
-	SentNotesGauge = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "sent_notes_total",
-			Help: "Total number of notes sent to the notification bot",
+	// Объявляем метрику Counter (для rate показателей)
+	NotesSentCounter = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "notes_sent_total",
+			Help: "Total number of notes sent",
 		},
 	)
 
-	// Метрика для количества отправленных заметок по времени
-	NotesSentCounterVec = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "notes_sent_for_time",
-			Help: "Number of notes sent, with timestamp as a label",
+	// Объявляем метрику Histogram (для response time показателей)
+	ResponseTimeHistogram = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "response_time_seconds",
+			Help:    "Response time in seconds",
+			Buckets: prometheus.LinearBuckets(0.1, 0.1, 10), // Бакеты от 0.1 до 1.0 секунд
 		},
-		[]string{"timestamp"},
 	)
 )
 
 func Init() {
 	// Регистрируем метрики
-	prometheus.MustRegister(SentNotesGauge)
-	prometheus.MustRegister(NotesSentCounterVec)
+	prometheus.MustRegister(NotesSentCounter)
+	prometheus.MustRegister(ResponseTimeHistogram)
 }
 
 func StartMetricsServer(port string) {
@@ -41,11 +40,4 @@ func StartMetricsServer(port string) {
 			log.Fatalf("failed to start metrics server: %v", err)
 		}
 	}()
-}
-
-func SendNotes(count int) {
-	SentNotesGauge.Add(float64(count)) // Увеличиваем общую метрику
-
-	// Увеличиваем счетчик с лейблом timestamp
-	NotesSentCounterVec.WithLabelValues(time.Now().Format("2006-01-02 15:04:05")).Add(float64(count))
 }
