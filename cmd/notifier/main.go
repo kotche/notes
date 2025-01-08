@@ -2,18 +2,18 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/kotche/bot/internal/app/notifier"
+	"github.com/kotche/bot/internal/config"
 	notes_repo "github.com/kotche/bot/internal/repository/notes"
 	"github.com/kotche/bot/internal/service/kafka"
 	notes_serv "github.com/kotche/bot/internal/service/notes"
 	"log"
-	"os"
 	"time"
 
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 
-	"github.com/joho/godotenv"
 	"gopkg.in/telebot.v3"
 )
 
@@ -27,18 +27,13 @@ func init() {
 }
 
 func main() {
-	err := godotenv.Load()
+	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatalln("loading .env error: ", err)
-	}
-
-	token := os.Getenv("TOKEN_NOTIFY_BOT")
-	if token == "" {
-		log.Fatalln("TOKEN_NOTIFY_BOT is not read")
+		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
 	bot, err := telebot.NewBot(telebot.Settings{
-		Token:  token,
+		Token:  cfg.TelegramConfig.TokenNotifyBot,
 		Poller: &telebot.LongPoller{Timeout: 10 * time.Second},
 	})
 
@@ -46,23 +41,33 @@ func main() {
 		log.Fatal(err)
 	}
 
-	//TODO(cheki) вынести креды в env
-	//connStr := "host=localhost port=5432 user=youruser password=yourpassword dbname=yourdb sslmode=disable"
-	connStr := "postgres://youruser:yourpassword@localhost:5432/yourdb?sslmode=disable"
+	connStr := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		cfg.PostgresConfig.Host,
+		cfg.PostgresConfig.Port,
+		cfg.PostgresConfig.User,
+		cfg.PostgresConfig.Password,
+		cfg.PostgresConfig.DBName,
+		cfg.PostgresConfig.SSLMode,
+	)
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	notesServ := notes_serv.NewDefaultService(notes_repo.NewDefaultRepository(db))
-
-	kafkaServ, err := kafka.New([]string{"localhost:9092"}, "notifications",
-		"notification-consumers", 1, 1)
+	kafkaServ, err := kafka.New(
+		cfg.KafkaConfig.Brokers,
+		cfg.KafkaConfig.Topic,
+		cfg.KafkaConfig.GroupID,
+		1,
+		1,
+	)
 	if err != nil {
 		log.Fatalf("failed to initialize kafka: %v", err)
 	}
 	defer kafkaServ.Close()
 
+	notesServ := notes_serv.NewDefaultService(notes_repo.NewDefaultRepository(db))
 	notifierImpl := notifier.New(bot, notesServ, kafkaServ)
 	notifierImpl.Start()
 }

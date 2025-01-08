@@ -57,9 +57,8 @@ func (n *Notifier) Start() {
 }
 
 func (n *Notifier) sendNotifications(ctx context.Context) error {
-	// TODO(cheki) вернуть
-	//start := time.Now().Truncate(checkInterval)
-	start := time.Date(2025, 1, 8, 15, 30, 0, 0, time.Local)
+	//start := time.Date(2025, 1, 8, 15, 30, 0, 0, time.Local)
+	start := time.Now().Truncate(checkInterval)
 	end := start.Add(checkInterval)
 
 	//log.Printf("ReceiveNotifications start '%s' and end '%s'", start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"))

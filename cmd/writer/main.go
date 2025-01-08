@@ -5,17 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"github.com/kotche/bot/internal/app/writer"
+	"github.com/kotche/bot/internal/config"
 	notes_repo "github.com/kotche/bot/internal/repository/notes"
 	notes_serv "github.com/kotche/bot/internal/service/notes"
 	"log"
-	"os"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 
-	"github.com/joho/godotenv"
 	"gopkg.in/telebot.v3"
 )
 
@@ -29,18 +28,13 @@ func init() {
 }
 
 func main() {
-	err := godotenv.Load()
+	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatalln("loading .env error: ", err)
-	}
-
-	token := os.Getenv("TOKEN_WRITE_BOT")
-	if token == "" {
-		log.Fatalln("TOKEN_WRITE_BOT is not read")
+		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
 	bot, err := telebot.NewBot(telebot.Settings{
-		Token:  token,
+		Token:  cfg.TelegramConfig.TokenWriteBot,
 		Poller: &telebot.LongPoller{Timeout: 10 * time.Second},
 	})
 
@@ -48,9 +42,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	//TODO(cheki) вынести креды в env
-	//connStr := "host=localhost port=5432 user=youruser password=yourpassword dbname=yourdb sslmode=disable"
-	connStr := "postgres://youruser:yourpassword@localhost:5432/yourdb?sslmode=disable"
+	connStr := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		cfg.PostgresConfig.Host,
+		cfg.PostgresConfig.Port,
+		cfg.PostgresConfig.User,
+		cfg.PostgresConfig.Password,
+		cfg.PostgresConfig.DBName,
+		cfg.PostgresConfig.SSLMode,
+	)
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatalln(err)
@@ -61,7 +61,6 @@ func main() {
 	}
 
 	notesServ := notes_serv.NewDefaultService(notes_repo.NewDefaultRepository(db))
-
 	writerImpl := writer.New(bot, notesServ)
 	writerImpl.Start()
 }
