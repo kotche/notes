@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/kotche/bot/infrastructure/tracing"
 	"github.com/kotche/bot/internal/model"
 	_ "github.com/lib/pq"
 	"time"
@@ -90,6 +91,9 @@ func (d *DefaultRepository) DeleteNote(ctx context.Context, noteID model.NoteID,
 }
 
 func (d *DefaultRepository) ListNotes(ctx context.Context, userID model.UserID, showDeleted bool) ([]model.Note, error) {
+	ctx, span := tracing.StartSpan(ctx, "ListNotes_repo")
+	defer span.End()
+
 	queryBuilder := squirrel.
 		Select("id",
 			"text",

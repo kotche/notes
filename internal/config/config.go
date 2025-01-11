@@ -12,6 +12,7 @@ type Config struct {
 	TelegramConfig TelegramConfig
 	PostgresConfig PostgresConfig
 	KafkaConfig    KafkaConfig
+	TracingConfig  TracingConfig
 }
 
 type TelegramConfig struct {
@@ -32,6 +33,10 @@ type KafkaConfig struct {
 	Brokers []string
 	Topic   string
 	GroupID string
+}
+
+type TracingConfig struct {
+	Endpoint string
 }
 
 func LoadConfig() (*Config, error) {
@@ -56,6 +61,9 @@ func LoadConfig() (*Config, error) {
 			Brokers: []string{getEnv("KAFKA_BROKERS", "localhost:9092")},
 			Topic:   getEnv("KAFKA_TOPIC", "notifications"),
 			GroupID: getEnv("KAFKA_GROUP_ID", "notification-consumers"),
+		},
+		TracingConfig: TracingConfig{
+			Endpoint: getEnv("TRACING_ENDPOINT", "http://localhost:14268/api/traces"),
 		},
 	}
 
