@@ -3,9 +3,9 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"github.com/kotche/bot/infrastructure/metrics"
 	"github.com/kotche/bot/internal/app/notifier"
 	"github.com/kotche/bot/internal/config"
-	"github.com/kotche/bot/internal/metrics"
 	notes_repo "github.com/kotche/bot/internal/repository/notes"
 	"github.com/kotche/bot/internal/service/kafka"
 	notes_serv "github.com/kotche/bot/internal/service/notes"
@@ -56,7 +56,7 @@ func main() {
 	)
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatal(err)
 	}
 
 	kafkaServ, err := kafka.New(

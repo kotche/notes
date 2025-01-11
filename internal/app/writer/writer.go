@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/kotche/bot/infrastructure/tracing"
 	"github.com/kotche/bot/internal/model"
 	"github.com/kotche/bot/internal/service/notes"
 	"gopkg.in/telebot.v3"
@@ -288,6 +289,9 @@ func (w *Writer) listNoteHandler() {
 
 		ctx, cancel := context.WithTimeout(context.Background(), longProcessTimeout*time.Second)
 		defer cancel()
+
+		ctx, span := tracing.StartSpan(ctx, "listNoteHandler_app")
+		defer span.End()
 
 		notesList, err := w.notes.List(ctx, userID, showDeleted)
 		if err != nil {

@@ -3,7 +3,7 @@ package notifier
 import (
 	"context"
 	"fmt"
-	"github.com/kotche/bot/internal/metrics"
+	"github.com/kotche/bot/infrastructure/metrics"
 	"github.com/kotche/bot/internal/model"
 	"github.com/kotche/bot/internal/service/kafka"
 	"github.com/kotche/bot/internal/service/notes"

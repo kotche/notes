@@ -4,9 +4,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/kotche/bot/infrastructure/metrics"
+	"github.com/kotche/bot/infrastructure/tracing"
 	"github.com/kotche/bot/internal/app/writer"
 	"github.com/kotche/bot/internal/config"
-	"github.com/kotche/bot/internal/metrics"
 	notes_repo "github.com/kotche/bot/internal/repository/notes"
 	notes_serv "github.com/kotche/bot/internal/service/notes"
 	"log"
@@ -47,11 +48,11 @@ func main() {
 	}
 
 	connStr := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		cfg.PostgresConfig.Host,
-		cfg.PostgresConfig.Port,
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
 		cfg.PostgresConfig.User,
 		cfg.PostgresConfig.Password,
+		cfg.PostgresConfig.Host,
+		cfg.PostgresConfig.Port,
 		cfg.PostgresConfig.DBName,
 		cfg.PostgresConfig.SSLMode,
 	)
@@ -63,6 +64,12 @@ func main() {
 	if err = runMigrations(connStr); err != nil {
 		log.Fatalln("migration error:", err)
 	}
+
+	_, cleanup, err := tracing.InitTracing(cfg.TracingConfig.Endpoint)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer cleanup()
 
 	notesServ := notes_serv.NewDefaultService(notes_repo.NewDefaultRepository(db))
 	writerImpl := writer.New(bot, notesServ)
